@@ -1,6 +1,6 @@
 {
   "name": "third-party-dependencies",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Third party dependencies used in Kambi Sportsbook Widgets.",
   "main": "gulpfile.js",
   "scripts": {
@@ -21,6 +21,8 @@
     "gulp": "^3.9.1",
     "gulp-concat": "^2.6.0",
     "gulp-rename": "^1.2.2",
-    "gulp-uglify": "^1.5.3"
+    "gulp-uglify": "^1.5.3",
+    "gulp-git": "^1.7.0",
+    "gulp-bump": "^1.0.0"
   }
 }
