@@ -10,6 +10,8 @@ var gulp = require('gulp'),
 
    uglify = require('gulp-uglify');
 
+   require('./gulpVersionBumper.js');
+
 gulp.task('clean', function() {
    return del.sync('dist');
 });
