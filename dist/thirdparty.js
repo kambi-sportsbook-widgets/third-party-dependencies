@@ -16,7 +16,7 @@
 ;(function() {
     'use strict';
 
-    var VERSION = "0.8.1";
+    var VERSION = "1.0.0";
 
     // Global counter for all events in all modules (including mixed in objects)
     var guid = 1;
@@ -326,7 +326,7 @@
             var mutateData = {
                 "key" : key,
                 "newValue" : value,
-                "oldValue" : oldValue || null
+                "oldValue" : (typeof oldValue !== 'undefined') ? oldValue : null
             };
 
             this.emit('mutate', mutateData);
@@ -622,7 +622,7 @@
  * @copyright Copyright (c) 2014 Yehuda Katz, Tom Dale, Stefan Penner and contributors (Conversion to ES6 API by Jake Archibald)
  * @license   Licensed under MIT license
  *            See https://raw.githubusercontent.com/jakearchibald/es6-promise/master/LICENSE
- * @version   3.2.1
+ * @version   3.2.2+35df15ea
  */
 
 (function() {
@@ -1448,7 +1448,7 @@
         lib$es6$promise$$internal$$makePromise(this.promise);
       }
 
-      if (Array.isArray(input)) {
+      if (lib$es6$promise$utils$$isArray(input)) {
         this._input     = input;
         this.length     = input.length;
         this._remaining = input.length;
@@ -2028,7 +2028,6 @@
     this.keypath = keypath
     this.callback = callback
     this.objectPath = []
-    this.update = this.update.bind(this)
     this.parse()
 
     if (isObject(this.target = this.realize())) {
@@ -2094,12 +2093,12 @@
       if (isObject(current)) {
         if (typeof this.objectPath[index] !== 'undefined') {
           if (current !== (prev = this.objectPath[index])) {
-            this.set(false, token, prev, this.update)
-            this.set(true, token, current, this.update)
+            this.set(false, token, prev, this.update.bind(this))
+            this.set(true, token, current, this.update.bind(this))
             this.objectPath[index] = current
           }
         } else {
-          this.set(true, token, current, this.update)
+          this.set(true, token, current, this.update.bind(this))
           this.objectPath[index] = current
         }
 
@@ -2110,7 +2109,7 @@
         }
 
         if (prev = this.objectPath[index]) {
-          this.set(false, token, prev, this.update)
+          this.set(false, token, prev, this.update.bind(this))
         }
       }
     }, this)
@@ -2194,7 +2193,7 @@
 
     this.tokens.forEach(function(token, index) {
       if (obj = this.objectPath[index]) {
-        this.set(false, token, obj, this.update)
+        this.set(false, token, obj, this.update.bind(this))
       }
     }, this)
 
@@ -2226,7 +2225,7 @@
 }).call(this);
 
 // Rivets.js
-// version: 0.8.1
+// version: 0.9.3
 // author: Michael Richards
 // license: MIT
 (function() {
@@ -2238,7 +2237,7 @@
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
   Rivets = {
-    options: ['prefix', 'templateDelimiters', 'rootInterface', 'preloadData', 'handler'],
+    options: ['prefix', 'templateDelimiters', 'rootInterface', 'preloadData', 'handler', 'executeFunctions'],
     extensions: ['binders', 'formatters', 'components', 'adapters'],
     "public": {
       binders: {},
@@ -2249,6 +2248,10 @@
       templateDelimiters: ['{', '}'],
       rootInterface: '.',
       preloadData: true,
+      executeFunctions: false,
+      iterationAlias: function(modelName) {
+        return '%' + modelName + '%';
+      },
       handler: function(context, ev, binding) {
         return this.call(context, ev, binding.view.models);
       },
@@ -2282,7 +2285,7 @@
         return view;
       },
       init: function(component, el, data) {
-        var scope, view;
+        var scope, template, view;
         if (data == null) {
           data = {};
         }
@@ -2290,7 +2293,15 @@
           el = document.createElement('div');
         }
         component = Rivets["public"].components[component];
-        el.innerHTML = component.template.call(this, el);
+        template = component.template.call(this, el);
+        if (template instanceof HTMLElement) {
+          while (el.firstChild) {
+            el.removeChild(el.firstChild);
+          }
+          el.appendChild(template);
+        } else {
+          el.innerHTML = template;
+        }
         scope = component.initialize.call(this, el, data);
         view = new Rivets.View(el, scope);
         view.bind();
@@ -2390,6 +2401,11 @@
           value: null
         };
       } else if (string === 'undefined') {
+        return {
+          type: this.types.primitive,
+          value: void 0
+        };
+      } else if (string === '') {
         return {
           type: this.types.primitive,
           value: void 0
@@ -2539,7 +2555,7 @@
       options = {};
       pipes = (function() {
         var _i, _len, _ref1, _results;
-        _ref1 = declaration.split('|');
+        _ref1 = declaration.match(/((?:'[^']*')*(?:(?:[^\|']*(?:'[^']*')+[^\|']*)+|[^\|]+))|^$/g);
         _results = [];
         for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
           pipe = _ref1[_i];
@@ -2570,7 +2586,7 @@
       this.bindings = [];
       parse = (function(_this) {
         return function(node) {
-          var block, childNode, delimiters, n, parser, text, token, tokens, _i, _j, _len, _len1, _ref1, _results;
+          var block, childNode, delimiters, n, parser, text, token, tokens, _i, _j, _len, _len1, _ref1;
           if (node.nodeType === 3) {
             parser = Rivets.TextTemplateParser;
             if (delimiters = _this.templateDelimiters) {
@@ -2593,21 +2609,19 @@
           }
           if (!block) {
             _ref1 = (function() {
-              var _k, _len1, _ref1, _results1;
+              var _k, _len1, _ref1, _results;
               _ref1 = node.childNodes;
-              _results1 = [];
+              _results = [];
               for (_k = 0, _len1 = _ref1.length; _k < _len1; _k++) {
                 n = _ref1[_k];
-                _results1.push(n);
+                _results.push(n);
               }
-              return _results1;
+              return _results;
             })();
-            _results = [];
             for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
               childNode = _ref1[_j];
-              _results.push(parse(childNode));
+              parse(childNode);
             }
-            return _results;
           }
         };
       })(this);
@@ -2682,54 +2696,48 @@
     };
 
     View.prototype.bind = function() {
-      var binding, _i, _len, _ref1, _results;
+      var binding, _i, _len, _ref1;
       _ref1 = this.bindings;
-      _results = [];
       for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
         binding = _ref1[_i];
-        _results.push(binding.bind());
+        binding.bind();
       }
-      return _results;
     };
 
     View.prototype.unbind = function() {
-      var binding, _i, _len, _ref1, _results;
+      var binding, _i, _len, _ref1;
       _ref1 = this.bindings;
-      _results = [];
       for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
         binding = _ref1[_i];
-        _results.push(binding.unbind());
+        binding.unbind();
       }
-      return _results;
     };
 
     View.prototype.sync = function() {
-      var binding, _i, _len, _ref1, _results;
+      var binding, _i, _len, _ref1;
       _ref1 = this.bindings;
-      _results = [];
       for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
         binding = _ref1[_i];
-        _results.push(typeof binding.sync === "function" ? binding.sync() : void 0);
+        if (typeof binding.sync === "function") {
+          binding.sync();
+        }
       }
-      return _results;
     };
 
     View.prototype.publish = function() {
-      var binding, _i, _len, _ref1, _results;
+      var binding, _i, _len, _ref1;
       _ref1 = this.select(function(b) {
         var _ref1;
         return (_ref1 = b.binder) != null ? _ref1.publishes : void 0;
       });
-      _results = [];
       for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
         binding = _ref1[_i];
-        _results.push(binding.publish());
+        binding.publish();
       }
-      return _results;
     };
 
     View.prototype.update = function(models) {
-      var binding, key, model, _i, _len, _ref1, _results;
+      var binding, key, model, _i, _len, _ref1;
       if (models == null) {
         models = {};
       }
@@ -2738,12 +2746,12 @@
         this.models[key] = model;
       }
       _ref1 = this.bindings;
-      _results = [];
       for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
         binding = _ref1[_i];
-        _results.push(typeof binding.update === "function" ? binding.update(models) : void 0);
+        if (typeof binding.update === "function") {
+          binding.update(models);
+        }
       }
-      return _results;
     };
 
     return View;
@@ -2766,6 +2774,7 @@
       this.set = __bind(this.set, this);
       this.eventHandler = __bind(this.eventHandler, this);
       this.formattedValue = __bind(this.formattedValue, this);
+      this.parseFormatterArguments = __bind(this.parseFormatterArguments, this);
       this.parseTarget = __bind(this.parseTarget, this);
       this.observe = __bind(this.observe, this);
       this.setBinder = __bind(this.setBinder, this);
@@ -2810,7 +2819,7 @@
     Binding.prototype.parseTarget = function() {
       var token;
       token = Rivets.TypeParser.parse(this.keypath);
-      if (token.type === 0) {
+      if (token.type === Rivets.TypeParser.types.primitive) {
         return this.value = token.value;
       } else {
         this.observer = this.observe(this.view.models, this.keypath, this.sync);
@@ -2818,32 +2827,38 @@
       }
     };
 
+    Binding.prototype.parseFormatterArguments = function(args, formatterIndex) {
+      var ai, arg, observer, processedArgs, _base, _i, _len;
+      args = (function() {
+        var _i, _len, _results;
+        _results = [];
+        for (_i = 0, _len = args.length; _i < _len; _i++) {
+          arg = args[_i];
+          _results.push(Rivets.TypeParser.parse(arg));
+        }
+        return _results;
+      })();
+      processedArgs = [];
+      for (ai = _i = 0, _len = args.length; _i < _len; ai = ++_i) {
+        arg = args[ai];
+        processedArgs.push(arg.type === Rivets.TypeParser.types.primitive ? arg.value : ((_base = this.formatterObservers)[formatterIndex] || (_base[formatterIndex] = {}), !(observer = this.formatterObservers[formatterIndex][ai]) ? (observer = this.observe(this.view.models, arg.value, this.sync), this.formatterObservers[formatterIndex][ai] = observer) : void 0, observer.value()));
+      }
+      return processedArgs;
+    };
+
     Binding.prototype.formattedValue = function(value) {
-      var ai, arg, args, fi, formatter, id, observer, processedArgs, _base, _i, _j, _len, _len1, _ref1;
+      var args, fi, formatter, id, processedArgs, _i, _len, _ref1, _ref2;
       _ref1 = this.formatters;
       for (fi = _i = 0, _len = _ref1.length; _i < _len; fi = ++_i) {
         formatter = _ref1[fi];
         args = formatter.match(/[^\s']+|'([^']|'[^\s])*'|"([^"]|"[^\s])*"/g);
         id = args.shift();
         formatter = this.view.formatters[id];
-        args = (function() {
-          var _j, _len1, _results;
-          _results = [];
-          for (_j = 0, _len1 = args.length; _j < _len1; _j++) {
-            arg = args[_j];
-            _results.push(Rivets.TypeParser.parse(arg));
-          }
-          return _results;
-        })();
-        processedArgs = [];
-        for (ai = _j = 0, _len1 = args.length; _j < _len1; ai = ++_j) {
-          arg = args[ai];
-          processedArgs.push(arg.type === 0 ? arg.value : ((_base = this.formatterObservers)[fi] || (_base[fi] = {}), !(observer = this.formatterObservers[fi][ai]) ? (observer = this.observe(this.view.models, arg.value, this.sync), this.formatterObservers[fi][ai] = observer) : void 0, observer.value()));
-        }
+        processedArgs = this.parseFormatterArguments(args, fi);
         if ((formatter != null ? formatter.read : void 0) instanceof Function) {
-          value = formatter.read.apply(formatter, [value].concat(__slice.call(processedArgs)));
+          value = (_ref2 = formatter.read).call.apply(_ref2, [this.model, value].concat(__slice.call(processedArgs)));
         } else if (formatter instanceof Function) {
-          value = formatter.apply(null, [value].concat(__slice.call(processedArgs)));
+          value = formatter.call.apply(formatter, [this.model, value].concat(__slice.call(processedArgs)));
         }
       }
       return value;
@@ -2859,7 +2874,7 @@
 
     Binding.prototype.set = function(value) {
       var _ref1;
-      value = value instanceof Function && !this.binder["function"] ? this.formattedValue(value.call(this.model)) : this.formattedValue(value);
+      value = value instanceof Function && !this.binder["function"] && Rivets["public"].executeFunctions ? this.formattedValue(value.call(this.model)) : this.formattedValue(value);
       return (_ref1 = this.binder.routine) != null ? _ref1.call(this, this.el, value) : void 0;
     };
 
@@ -2892,16 +2907,19 @@
     };
 
     Binding.prototype.publish = function() {
-      var args, formatter, id, value, _i, _len, _ref1, _ref2, _ref3;
+      var args, fi, fiReversed, formatter, id, lastformatterIndex, processedArgs, value, _i, _len, _ref1, _ref2, _ref3;
       if (this.observer) {
         value = this.getValue(this.el);
+        lastformatterIndex = this.formatters.length - 1;
         _ref1 = this.formatters.slice(0).reverse();
-        for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
-          formatter = _ref1[_i];
+        for (fiReversed = _i = 0, _len = _ref1.length; _i < _len; fiReversed = ++_i) {
+          formatter = _ref1[fiReversed];
+          fi = lastformatterIndex - fiReversed;
           args = formatter.split(/\s+/);
           id = args.shift();
+          processedArgs = this.parseFormatterArguments(args, fi);
           if ((_ref2 = this.view.formatters[id]) != null ? _ref2.publish : void 0) {
-            value = (_ref3 = this.view.formatters[id]).publish.apply(_ref3, [value].concat(__slice.call(args)));
+            value = (_ref3 = this.view.formatters[id]).publish.apply(_ref3, [value].concat(__slice.call(processedArgs)));
           }
         }
         return this.observer.setValue(value);
@@ -2977,7 +2995,7 @@
     __extends(ComponentBinding, _super);
 
     function ComponentBinding(view, el, type) {
-      var attribute, bindingRegExp, propertyName, _i, _len, _ref1, _ref2;
+      var attribute, bindingRegExp, propertyName, token, _i, _len, _ref1, _ref2;
       this.view = view;
       this.el = el;
       this.type = type;
@@ -2994,8 +3012,11 @@
         attribute = _ref1[_i];
         if (!bindingRegExp.test(attribute.name)) {
           propertyName = this.camelCase(attribute.name);
+          token = Rivets.TypeParser.parse(attribute.value);
           if (__indexOf.call((_ref2 = this.component["static"]) != null ? _ref2 : [], propertyName) >= 0) {
             this["static"][propertyName] = attribute.value;
+          } else if (token.type === Rivets.TypeParser.types.primitive) {
+            this["static"][propertyName] = token.value;
           } else {
             this.observers[propertyName] = attribute.value;
           }
@@ -3032,7 +3053,7 @@
     };
 
     ComponentBinding.prototype.bind = function() {
-      var k, key, keypath, observer, option, options, scope, v, _base, _i, _j, _len, _len1, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7, _results;
+      var k, key, keypath, observer, option, options, scope, v, _base, _i, _j, _len, _len1, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7;
       if (!this.bound) {
         _ref1 = this.observers;
         for (key in _ref1) {
@@ -3048,7 +3069,7 @@
         this.bound = true;
       }
       if (this.componentView != null) {
-        return this.componentView.bind();
+        this.componentView.bind();
       } else {
         this.el.innerHTML = this.component.template.call(this);
         scope = this.component.initialize.call(this, this.el, this.locals());
@@ -3078,21 +3099,19 @@
           option = _ref5[_j];
           options[option] = (_ref6 = this.component[option]) != null ? _ref6 : this.view[option];
         }
-        this.componentView = new Rivets.View(this.el, scope, options);
+        this.componentView = new Rivets.View(Array.prototype.slice.call(this.el.childNodes), scope, options);
         this.componentView.bind();
         _ref7 = this.observers;
-        _results = [];
         for (key in _ref7) {
           observer = _ref7[key];
-          _results.push(this.upstreamObservers[key] = this.observe(this.componentView.models, key, ((function(_this) {
+          this.upstreamObservers[key] = this.observe(this.componentView.models, key, ((function(_this) {
             return function(key, observer) {
               return function() {
                 return observer.setValue(_this.componentView.models[key]);
               };
             };
-          })(this)).call(this, key, observer)));
+          })(this)).call(this, key, observer));
         }
-        return _results;
       }
     };
 
@@ -3266,8 +3285,10 @@
       }
     },
     unbind: function() {
-      var _ref1;
-      return (_ref1 = this.nested) != null ? _ref1.unbind() : void 0;
+      if (this.nested) {
+        this.nested.unbind();
+        return this.bound = false;
+      }
     },
     routine: function(el, value) {
       var key, model, models, _ref1;
@@ -3349,19 +3370,17 @@
       }
     },
     unbind: function(el) {
-      var view, _i, _len, _ref1, _results;
+      var view, _i, _len, _ref1;
       if (this.iterated != null) {
         _ref1 = this.iterated;
-        _results = [];
         for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
           view = _ref1[_i];
-          _results.push(view.unbind());
+          view.unbind();
         }
-        return _results;
       }
     },
     routine: function(el, collection) {
-      var binding, data, i, index, key, model, modelName, options, previous, template, view, _i, _j, _k, _len, _len1, _len2, _ref1, _ref2, _ref3, _results;
+      var binding, data, i, index, key, model, modelName, options, previous, template, view, _i, _j, _k, _len, _len1, _len2, _ref1, _ref2, _ref3;
       modelName = this.args[0];
       collection = collection || [];
       if (this.iterated.length > collection.length) {
@@ -3378,6 +3397,7 @@
         data = {
           index: index
         };
+        data[Rivets["public"].iterationAlias(modelName)] = index;
         data[modelName] = model;
         if (this.iterated[index] == null) {
           _ref2 = this.view.models;
@@ -3401,20 +3421,16 @@
       }
       if (el.nodeName === 'OPTION') {
         _ref3 = this.view.bindings;
-        _results = [];
         for (_k = 0, _len2 = _ref3.length; _k < _len2; _k++) {
           binding = _ref3[_k];
           if (binding.el === this.marker.parentNode && binding.type === 'value') {
-            _results.push(binding.sync());
-          } else {
-            _results.push(void 0);
+            binding.sync();
           }
         }
-        return _results;
       }
     },
     update: function(models) {
-      var data, key, model, view, _i, _len, _ref1, _results;
+      var data, key, model, view, _i, _len, _ref1;
       data = {};
       for (key in models) {
         model = models[key];
@@ -3423,12 +3439,10 @@
         }
       }
       _ref1 = this.iterated;
-      _results = [];
       for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
         view = _ref1[_i];
-        _results.push(view.update(data));
+        view.update(data);
       }
-      return _results;
     }
   };
 
@@ -3446,6 +3460,12 @@
     } else {
       return el.removeAttribute(this.type);
     }
+  };
+
+  Rivets["public"].formatters['call'] = function() {
+    var args, value;
+    value = arguments[0], args = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
+    return value.call.apply(value, [this].concat(__slice.call(args)));
   };
 
   Rivets["public"].adapters['.'] = {
@@ -3542,7 +3562,7 @@
             },
             set: (function(_this) {
               return function(newValue) {
-                var map, _i, _len, _ref1;
+                var cb, map, _i, _len, _ref1;
                 if (newValue !== value) {
                   _this.unobserveMutations(value, obj[_this.id], keypath);
                   value = newValue;
@@ -3551,9 +3571,9 @@
                     if (callbacks[keypath]) {
                       _ref1 = callbacks[keypath].slice();
                       for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
-                        callback = _ref1[_i];
-                        if (__indexOf.call(callbacks[keypath], callback) >= 0) {
-                          callback();
+                        cb = _ref1[_i];
+                        if (__indexOf.call(callbacks[keypath], cb) >= 0) {
+                          cb();
                         }
                       }
                     }
@@ -3578,9 +3598,9 @@
             callbacks.splice(idx, 1);
             if (!callbacks.length) {
               delete map.callbacks[keypath];
+              this.unobserveMutations(obj[keypath], obj[this.id], keypath);
             }
           }
-          this.unobserveMutations(obj[keypath], obj[this.id], keypath);
           return this.cleanupWeakReference(map, obj[this.id]);
         }
       }
